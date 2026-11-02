@@ -1,0 +1,1101 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#09090b">
+<title>IMPOSTER — Trust No One</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root {
+    --bg:#09090b;
+    --panel:#111114;
+    --panel2:#18181c;
+    --border:#28282e;
+    --text:#f4f4f5;
+    --muted:#85858f;
+    --orange:#f16a3b;
+    --green:#55d69e;
+    --red:#ff5c64;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+    min-height:100vh;
+    background:radial-gradient(ellipse at 50% -20%,#392016 0%,transparent 45%),var(--bg);
+    color:var(--text);
+    font-family:Arial,sans-serif;
+}
+button,input { font:inherit; }
+button { cursor:pointer; }
+button:disabled { opacity:.4; cursor:not-allowed; }
+.hidden { display:none!important; }
+header {
+    height:65px;
+    padding:0 6%;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-bottom:1px solid #ffffff12;
+    position:sticky;
+    top:0;
+    background:#09090be8;
+    z-index:5;
+}
+.logo { font-size:20px; font-weight:800; letter-spacing:2px; }
+.logo span { color:var(--orange); }
+.header-right { color:var(--muted); font-size:12px; }
+main { max-width:1050px; margin:auto; padding:45px 20px; }
+h1,h2,h3 { letter-spacing:-.5px; }
+.muted { color:var(--muted); }
+.eyebrow {
+    color:var(--orange);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:3px;
+    margin-bottom:12px;
+}
+.btn {
+    border:0;
+    border-radius:10px;
+    padding:13px 18px;
+    font-weight:700;
+}
+.primary { background:var(--orange); color:#1b100b; }
+.secondary { background:var(--panel2); color:white; border:1px solid var(--border); }
+.input {
+    width:100%;
+    background:#0b0b0e;
+    border:1px solid var(--border);
+    color:white;
+    padding:14px;
+    border-radius:10px;
+    outline:none;
+}
+.input:focus { border-color:var(--orange); }
+.card {
+    background:linear-gradient(145deg,#151519,#101013);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:22px;
+}
+.home { max-width:500px; margin:45px auto; text-align:center; }
+.home h1 { font-size:58px; margin:15px 0; }
+.home h1 span { color:var(--orange); }
+.home-panel { text-align:left; margin-top:30px; }
+.field-label {
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    margin-bottom:8px;
+}
+.home-actions,.join-row { display:flex; gap:10px; margin-top:12px; }
+.home-actions button { flex:1; }
+.error { color:var(--red); margin-top:12px; font-size:12px; }
+.room-top {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:15px;
+    margin-bottom:25px;
+}
+.room-code {
+    background:#1a1513;
+    border:1px solid #5b3024;
+    padding:12px 17px;
+    border-radius:12px;
+    text-align:center;
+}
+.room-code small { display:block; color:var(--muted); font-size:9px; }
+.room-code strong { color:var(--orange); letter-spacing:4px; font-size:20px; }
+.grid { display:grid; grid-template-columns:1.4fr .8fr; gap:15px; }
+.players-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.player,.mini-player {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:#1a1a1f;
+    border:1px solid var(--border);
+    padding:12px;
+    border-radius:10px;
+    margin-bottom:8px;
+}
+.avatar { font-size:22px; }
+.player-info { min-width:0; }
+.player-name { font-size:13px; font-weight:700; }
+.player-status { color:var(--muted); font-size:10px; margin-top:4px; }
+.ready-text { color:var(--green); }
+.side { display:flex; flex-direction:column; gap:12px; }
+.info-line {
+    display:flex;
+    justify-content:space-between;
+    padding:12px 0;
+    border-bottom:1px solid var(--border);
+    font-size:12px;
+}
+.info-line span { color:var(--muted); }
+.controls { display:flex; flex-direction:column; gap:9px; }
+.controls button { width:100%; }
+.phase {
+    display:inline-block;
+    padding:7px 13px;
+    background:#f16a3b18;
+    border:1px solid #f16a3b45;
+    border-radius:30px;
+    color:var(--orange);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:1px;
+}
+.game-header { text-align:center; margin-bottom:25px; }
+.game-header h1 { margin-bottom:12px; }
+.game-layout { display:grid; grid-template-columns:1fr 290px; gap:15px; }
+.chat-feed {
+    height:260px;
+    overflow-y:auto;
+    background:#0b0b0e;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:13px;
+    margin:15px 0;
+}
+.chat-message { font-size:13px; margin-bottom:13px; line-height:1.5; overflow-wrap:anywhere; }
+.chat-message strong { color:var(--orange); margin-right:6px; }
+.chat-row { display:flex; gap:8px; }
+.chat-row input { min-width:0; }
+.role-card {
+    border:1px solid #75412d;
+    background:linear-gradient(145deg,#251710,#151114);
+    border-radius:14px;
+    padding:18px;
+    margin-bottom:15px;
+}
+.role-card h2 { font-size:25px; margin:8px 0; }
+.role-word { color:var(--orange); font-size:20px; font-weight:800; }
+.vote-list { display:flex; flex-direction:column; gap:8px; }
+.vote-button {
+    width:100%;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    padding:11px;
+    border-radius:9px;
+    background:#1b1b20;
+    border:1px solid var(--border);
+    color:white;
+    text-align:left;
+}
+.vote-button.selected { border-color:var(--orange); background:#f16a3b18; }
+footer { text-align:center; color:#555; font-size:10px; padding:20px; }
+#toast {
+    position:fixed;
+    bottom:25px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#25252a;
+    border:1px solid #414149;
+    border-radius:10px;
+    padding:12px 18px;
+    font-size:12px;
+    opacity:0;
+    pointer-events:none;
+    transition:.2s;
+    z-index:10;
+}
+#toast.show { opacity:1; }
+@media(max-width:700px) {
+    main { padding:30px 15px; }
+    .grid,.game-layout { grid-template-columns:1fr; }
+    .room-top h1 { font-size:25px; }
+}
+@media(max-width:430px) {
+    .players-grid { grid-template-columns:1fr; }
+    .home h1 { font-size:45px; }
+    .home-actions { flex-direction:column; }
+}
+</style>
+</head>
+
+<body>
+<header>
+    <div class="logo">IMPOSTER<span>.</span></div>
+    <div class="header-right" id="connectionStatus">Connecting...</div>
+</header>
+
+<main>
+
+<section id="homeScreen" class="home">
+    <div class="eyebrow">THE SOCIAL DEDUCTION GAME</div>
+    <h1>TRUST<br><span>NO ONE.</span></h1>
+    <p class="muted">One of you doesn't belong. Find the Imposter.</p>
+
+    <div class="card home-panel">
+        <label class="field-label">YOUR PLAYER NAME</label>
+        <input id="playerName" class="input" maxlength="18" placeholder="Enter your name">
+
+        <div class="home-actions">
+            <button class="btn primary" id="createRoomButton">Create Room</button>
+            <button class="btn secondary" id="focusJoinButton">Join Room</button>
+        </div>
+
+        <p class="muted" style="text-align:center;margin:20px 0;font-size:11px">OR JOIN A FRIEND</p>
+
+        <div class="join-row">
+            <input id="roomCodeInput" class="input" maxlength="6" placeholder="ROOM CODE">
+            <button class="btn primary" id="joinRoomButton">Join</button>
+        </div>
+
+        <div id="homeError" class="error"></div>
+    </div>
+</section>
+
+<section id="lobbyScreen" class="hidden">
+    <div class="room-top">
+        <div>
+            <div class="eyebrow">WAITING ROOM</div>
+            <h1>THE LOBBY.</h1>
+            <p class="muted">Get everyone in. The Android host starts the game.</p>
+        </div>
+        <div class="room-code">
+            <small>ROOM CODE</small>
+            <strong id="roomCodeDisplay">------</strong>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3 style="margin-bottom:15px">Players <span id="playerCount" class="muted"></span></h3>
+            <div id="playersGrid" class="players-grid"></div>
+        </div>
+
+        <div class="side">
+            <div class="card">
+                <div class="eyebrow">GAME SETTINGS</div>
+                <div class="info-line"><span>Players</span><strong id="settingsPlayers">1</strong></div>
+                <div class="info-line"><span>Maximum</span><strong>5</strong></div>
+                <div class="info-line"><span>Host</span><strong>Android</strong></div>
+            </div>
+
+            <div class="card controls">
+                <button class="btn primary" id="readyButton">I'm Ready</button>
+                <button class="btn secondary" id="leaveButton">Leave Room</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="gameScreen" class="hidden">
+    <div class="game-header">
+        <div class="eyebrow">THE GAME IS ON</div>
+        <h1>WHO'S THE IMPOSTER?</h1>
+        <span class="phase" id="phaseLabel">CLUES</span>
+    </div>
+
+    <div id="roleCard" class="role-card hidden">
+        <div class="eyebrow">YOUR SECRET ROLE</div>
+        <h2 id="roleLabel">ASSIGNING...</h2>
+        <div id="wordLabel" class="role-word"></div>
+        <p id="roleDescription" class="muted" style="font-size:12px;margin-top:8px"></p>
+    </div>
+
+    <div class="game-layout">
+        <div class="card">
+            <div class="eyebrow">GAME DISCUSSION</div>
+            <div id="chatFeed" class="chat-feed">
+                <div class="muted">The game chat is ready.</div>
+            </div>
+
+            <div class="chat-row">
+                <input id="chatInput" class="input" maxlength="300" placeholder="Send a message...">
+                <button class="btn primary" id="sendChatButton">Send</button>
+            </div>
+
+            <div id="cluePanel" class="hidden" style="margin-top:22px">
+                <div class="eyebrow">SUBMIT YOUR CLUE</div>
+                <input id="clueInput" class="input" maxlength="180" placeholder="Give one clue...">
+                <button class="btn primary" id="submitClueButton" style="width:100%;margin-top:10px">
+                    Submit Clue
+                </button>
+            </div>
+        </div>
+
+        <div class="side">
+            <div class="card">
+                <h3 style="margin-bottom:12px">Players</h3>
+                <div id="gamePlayers"></div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom:8px">Voting</h3>
+                <p class="muted" style="font-size:11px;margin-bottom:12px">
+                    Select who you think is the Imposter.
+                </p>
+                <div id="voteList" class="vote-list"></div>
+                <button class="btn primary" id="submitVoteButton" style="width:100%;margin-top:12px" disabled>
+                    Submit Vote
+                </button>
+            </div>
+
+            <button class="btn secondary" id="gameLeaveButton">Leave Game</button>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>IMPOSTER · TRUST IS A WEAPON</footer>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+// SUPABASE
+
+const SUPABASE_URL = "https://mhoeshhwpzlgadmwhyhc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_bVuORj911vrnsN53AHGAtQ_DSqTgB1s";
+
+const supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
+// PLAYER
+
+const AVATARS = ["🦊","🐼","🐸","🐯","🐙","🦉","🐺","🐻"];
+
+const playerId =
+    localStorage.getItem("imposter_player_id") || crypto.randomUUID();
+
+localStorage.setItem("imposter_player_id", playerId);
+
+let playerName = localStorage.getItem("imposter_player_name") || "";
+let playerAvatar =
+    localStorage.getItem("imposter_player_avatar") ||
+    AVATARS[Math.floor(Math.random() * AVATARS.length)];
+
+let roomId = null;
+let roomChannel = null;
+let isHost = false;
+let isReady = false;
+let hasStarted = false;
+let votingOpen = false;
+let selectedVote = null;
+let myRole = null;
+let myWord = null;
+let gamePhase = "lobby";
+
+let players = new Map();
+let seenMessageIds = new Set();
+let submittedClue = false;
+let submittedVote = false;
+
+// ELEMENTS
+
+const homeScreen = document.getElementById("homeScreen");
+const lobbyScreen = document.getElementById("lobbyScreen");
+const gameScreen = document.getElementById("gameScreen");
+const connectionStatus = document.getElementById("connectionStatus");
+const homeError = document.getElementById("homeError");
+const toastElement = document.getElementById("toast");
+
+function showScreen(screen) {
+    homeScreen.classList.add("hidden");
+    lobbyScreen.classList.add("hidden");
+    gameScreen.classList.add("hidden");
+    screen.classList.remove("hidden");
+}
+
+let toastTimeout;
+
+function toast(message) {
+    toastElement.textContent = message;
+    toastElement.classList.add("show");
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => toastElement.classList.remove("show"), 2500);
+}
+
+function getPlayerName() {
+    const name = document.getElementById("playerName").value.trim();
+
+    if (name.length < 2) {
+        homeError.textContent = "Enter a name with at least 2 characters.";
+        return null;
+    }
+
+    playerName = name;
+    localStorage.setItem("imposter_player_name", name);
+    localStorage.setItem("imposter_player_avatar", playerAvatar);
+    homeError.textContent = "";
+    return name;
+}
+
+// DATABASE
+
+async function sendEvent(type, data = {}) {
+    if (!roomId) throw new Error("You are not in a room.");
+
+    const { error } = await supabaseClient
+        .from("game_messages")
+        .insert({
+            room_id: roomId,
+            sender_id: playerId,
+            message: {
+                type,
+                playerName,
+                avatar: playerAvatar,
+                data,
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    if (error) throw error;
+}
+
+function generateRoomCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    return Array.from({length:6}, () =>
+        chars[Math.floor(Math.random() * chars.length)]
+    ).join("");
+}
+
+// CREATE ROOM
+
+async function createRoom() {
+    if (!getPlayerName()) return;
+
+    const button = document.getElementById("createRoomButton");
+    button.disabled = true;
+
+    try {
+        let created = false;
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+            roomId = generateRoomCode();
+
+            const { data, error } = await supabaseClient
+                .from("game_messages")
+                .insert({
+                    room_id: roomId,
+                    sender_id: playerId,
+                    message: {
+                        type: "room_created",
+                        playerName,
+                        avatar: playerAvatar,
+                        data: {roomId}
+                    }
+                })
+                .select("id");
+
+            if (!error && data?.length) {
+                created = true;
+                break;
+            }
+
+            roomId = null;
+
+            if (error && !String(error.message).toLowerCase().includes("duplicate")) {
+                throw error;
+            }
+        }
+
+        if (!created) throw new Error("Could not create room.");
+
+        isHost = true;
+        isReady = true;
+
+        await sendEvent("player_joined", {
+            name: playerName,
+            avatar: playerAvatar,
+            ready: true,
+            host: true
+        });
+
+        await enterRoom();
+        toast("Room created!");
+
+    } catch (error) {
+        console.error(error);
+        homeError.textContent = error.message || "Could not create room.";
+        roomId = null;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// JOIN ROOM
+
+async function joinRoom() {
+    if (!getPlayerName()) return;
+
+    const code = document.getElementById("roomCodeInput")
+        .value.trim().toUpperCase();
+
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+        homeError.textContent = "Enter a valid room code.";
+        return;
+    }
+
+    const button = document.getElementById("joinRoomButton");
+    button.disabled = true;
+
+    try {
+        const {data,error} = await supabaseClient
+            .from("game_messages")
+            .select("*")
+            .eq("room_id",code)
+            .order("id",{ascending:true});
+
+        if (error) throw error;
+        if (!data?.length) throw new Error("Room not found.");
+
+        if (!data.some(row => row.message?.type === "room_created")) {
+            throw new Error("Room does not exist.");
+        }
+
+        if (data.some(row => row.message?.type === "game_started")) {
+            throw new Error("Game has already started.");
+        }
+
+        roomId = code;
+        isHost = false;
+        isReady = false;
+
+        await sendEvent("player_joined", {
+            name: playerName,
+            avatar: playerAvatar,
+            ready: false,
+            host: false
+        });
+
+        await enterRoom();
+        toast("Joined room!");
+
+    } catch (error) {
+        console.error(error);
+        homeError.textContent = error.message || "Could not join room.";
+        roomId = null;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// ENTER ROOM
+
+async function enterRoom() {
+    players.clear();
+    seenMessageIds.clear();
+    hasStarted = false;
+    votingOpen = false;
+    myRole = null;
+    myWord = null;
+    submittedClue = false;
+    submittedVote = false;
+
+    document.getElementById("roomCodeDisplay").textContent = roomId;
+    document.getElementById("readyButton").textContent =
+        isReady ? "Ready ✓" : "I'm Ready";
+
+    showScreen(lobbyScreen);
+
+    // Subscribe first so new messages are not missed.
+    await subscribeToRoom();
+    await loadRoomHistory();
+}
+
+// HISTORY
+
+async function loadRoomHistory() {
+    const {data,error} = await supabaseClient
+        .from("game_messages")
+        .select("*")
+        .eq("room_id",roomId)
+        .order("id",{ascending:true});
+
+    if (error) throw error;
+
+    for (const row of data || []) {
+        processMessage(row,false);
+    }
+}
+
+// REALTIME
+
+async function subscribeToRoom() {
+    if (roomChannel) {
+        await supabaseClient.removeChannel(roomChannel);
+        roomChannel = null;
+    }
+
+    roomChannel = supabaseClient
+        .channel("room-" + roomId)
+        .on(
+            "postgres_changes",
+            {
+                event:"INSERT",
+                schema:"public",
+                table:"game_messages",
+                filter:"room_id=eq." + roomId
+            },
+            payload => processMessage(payload.new,true)
+        );
+
+    await new Promise((resolve,reject) => {
+        const timeout = setTimeout(() => reject(new Error("Connection timed out.")),12000);
+
+        roomChannel.subscribe(status => {
+            if (status === "SUBSCRIBED") {
+                clearTimeout(timeout);
+                connectionStatus.textContent = "Connected";
+                resolve();
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                clearTimeout(timeout);
+                connectionStatus.textContent = "Connection error";
+                reject(new Error("Could not connect to room."));
+            }
+        });
+    });
+}
+
+// PROCESS EVENTS
+
+function processMessage(row,live) {
+    if (!row || seenMessageIds.has(row.id)) return;
+    seenMessageIds.add(row.id);
+
+    const message = row.message || {};
+    const data = message.data || {};
+    const sender = row.sender_id;
+    const type = message.type;
+
+    switch (type) {
+        case "room_created":
+            break;
+
+        case "player_joined":
+        case "ai_player_joined": {
+            const ai = type === "ai_player_joined" || Boolean(data.ai);
+
+            players.set(sender,{
+                id:sender,
+                name:message.playerName || data.name || "Player",
+                avatar:message.avatar || data.avatar || "👤",
+                ready:Boolean(data.ready),
+                host:Boolean(data.host),
+                ai
+            });
+
+            renderPlayers();
+
+            if (live && sender !== playerId) {
+                toast((message.playerName || "Player") + " joined.");
+            }
+            break;
+        }
+
+        case "player_ready":
+            if (players.has(sender)) {
+                players.get(sender).ready = Boolean(data.ready);
+                renderPlayers();
+            }
+            break;
+
+        case "player_left":
+            players.delete(sender);
+            renderPlayers();
+            break;
+
+        case "game_started":
+            hasStarted = true;
+            gamePhase = data.phase || "clues";
+            showScreen(gameScreen);
+            renderGamePlayers();
+            updatePhaseUI();
+            if (live) toast("The game has started!");
+            break;
+
+        case "role_assigned":
+            if (data.targetPlayerId === playerId) {
+                myRole = data.role;
+                myWord = data.word || "";
+                showRole();
+            }
+            break;
+
+        case "role_revealed":
+            if (data.targetPlayerId === playerId) {
+                myRole = data.role;
+                myWord = data.word || "";
+                showRole();
+            }
+            break;
+
+        case "phase_changed":
+            gamePhase = data.phase || gamePhase;
+            updatePhaseUI(data.instruction || "");
+            break;
+
+        case "chat":
+            addChatMessage(message.playerName || "Player",data.text || "");
+            break;
+
+        case "clue":
+            addChatMessage(
+                (message.playerName || "Player") + " · CLUE",
+                data.text || ""
+            );
+            break;
+
+        case "vote":
+            addChatMessage(message.playerName || "Player","Submitted a vote.");
+            break;
+
+        case "game_result":
+            addChatMessage("GAME",data.text || "Round ended.");
+            if (data.secretWord) {
+                addChatMessage("SECRET WORD",data.secretWord);
+            }
+            break;
+    }
+}
+
+// ROLE PANEL
+
+function showRole() {
+    const card = document.getElementById("roleCard");
+    card.classList.remove("hidden");
+
+    document.getElementById("roleLabel").textContent = myRole || "ASSIGNING";
+
+    if (myRole === "IMPOSTER") {
+        document.getElementById("wordLabel").textContent = "NO SECRET WORD";
+        document.getElementById("roleDescription").textContent =
+            "Blend in. Listen to the clues and avoid suspicion.";
+    } else {
+        document.getElementById("wordLabel").textContent = myWord || "";
+        document.getElementById("roleDescription").textContent =
+            "You are a Civilian. Give a subtle clue without saying the word.";
+    }
+}
+
+// PHASE UI
+
+function updatePhaseUI(instruction = "") {
+    document.getElementById("phaseLabel").textContent =
+        (gamePhase || "game").toUpperCase();
+
+    const cluePanel = document.getElementById("cluePanel");
+    cluePanel.classList.toggle(
+        "hidden",
+        gamePhase !== "clues" || submittedClue
+    );
+
+    if (instruction) {
+        toast(instruction);
+    }
+
+    votingOpen = gamePhase === "voting";
+    renderVoteList();
+}
+
+// RENDER PLAYERS
+
+function renderPlayers() {
+    const list = [...players.values()];
+    const grid = document.getElementById("playersGrid");
+
+    document.getElementById("playerCount").textContent =
+        "(" + list.length + "/5)";
+
+    document.getElementById("settingsPlayers").textContent = list.length;
+    grid.innerHTML = "";
+
+    for (const player of list) {
+        const card = document.createElement("div");
+        card.className = "player";
+
+        const avatar = document.createElement("div");
+        avatar.className = "avatar";
+        avatar.textContent = player.avatar;
+
+        const info = document.createElement("div");
+        info.className = "player-info";
+
+        const name = document.createElement("div");
+        name.className = "player-name";
+        name.textContent = player.name + (player.ai ? " · AI" : "");
+
+        const status = document.createElement("div");
+        status.className = "player-status";
+        status.textContent = player.ready ? "Ready" : "Not ready";
+
+        if (player.ready) status.classList.add("ready-text");
+
+        info.append(name,status);
+        card.append(avatar,info);
+        grid.appendChild(card);
+    }
+
+    renderGamePlayers();
+}
+
+// GAME PLAYERS
+
+function renderGamePlayers() {
+    const container = document.getElementById("gamePlayers");
+    container.innerHTML = "";
+
+    for (const player of players.values()) {
+        const row = document.createElement("div");
+        row.className = "mini-player";
+
+        const avatar = document.createElement("span");
+        avatar.className = "avatar";
+        avatar.textContent = player.avatar;
+
+        const name = document.createElement("span");
+        name.textContent = player.name + (player.ai ? " · AI" : "");
+
+        row.append(avatar,name);
+        container.appendChild(row);
+    }
+
+    renderVoteList();
+}
+
+// CHAT
+
+function addChatMessage(name,text) {
+    const feed = document.getElementById("chatFeed");
+
+    if (feed.querySelector(".muted")) {
+        feed.innerHTML = "";
+    }
+
+    const item = document.createElement("div");
+    item.className = "chat-message";
+
+    const strong = document.createElement("strong");
+    strong.textContent = name;
+
+    const content = document.createElement("span");
+    content.textContent = text;
+
+    item.append(strong,content);
+    feed.appendChild(item);
+    feed.scrollTop = feed.scrollHeight;
+}
+
+async function sendChat() {
+    const input = document.getElementById("chatInput");
+    const text = input.value.trim();
+    if (!text) return;
+
+    try {
+        await sendEvent("chat",{text});
+        input.value = "";
+    } catch (error) {
+        console.error(error);
+        toast("Message could not be sent.");
+    }
+}
+
+// CLUES
+
+async function submitClue() {
+    if (gamePhase !== "clues" || submittedClue) return;
+
+    const input = document.getElementById("clueInput");
+    const text = input.value.trim();
+
+    if (!text) return;
+
+    try {
+        await sendEvent("clue",{text});
+        submittedClue = true;
+        input.value = "";
+        updatePhaseUI();
+        toast("Clue submitted!");
+    } catch (error) {
+        console.error(error);
+        toast("Clue could not be submitted.");
+    }
+}
+
+// READY
+
+async function toggleReady() {
+    if (!roomId || hasStarted) return;
+
+    const next = !isReady;
+    const button = document.getElementById("readyButton");
+    button.disabled = true;
+
+    try {
+        await sendEvent("player_ready",{ready:next});
+        isReady = next;
+
+        if (players.has(playerId)) {
+            players.get(playerId).ready = next;
+        }
+
+        button.textContent = next ? "Ready ✓" : "I'm Ready";
+        renderPlayers();
+    } catch (error) {
+        toast("Could not update ready status.");
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// VOTING
+
+function renderVoteList() {
+    const container = document.getElementById("voteList");
+    const submit = document.getElementById("submitVoteButton");
+
+    if (!container || !submit) return;
+
+    container.innerHTML = "";
+
+    for (const player of players.values()) {
+        if (player.id === playerId) continue;
+
+        const button = document.createElement("button");
+        button.className = "vote-button";
+
+        if (selectedVote === player.id) {
+            button.classList.add("selected");
+        }
+
+        button.disabled = !votingOpen || submittedVote;
+
+        const avatar = document.createElement("span");
+        avatar.textContent = player.avatar;
+
+        const name = document.createElement("span");
+        name.textContent = player.name + (player.ai ? " · AI" : "");
+
+        button.append(avatar,name);
+
+        button.addEventListener("click",() => {
+            selectedVote = player.id;
+            renderVoteList();
+        });
+
+        container.appendChild(button);
+    }
+
+    submit.disabled =
+        !votingOpen || !selectedVote || submittedVote;
+}
+
+async function submitVote() {
+    if (!votingOpen || !selectedVote || submittedVote) return;
+
+    try {
+        await sendEvent("vote",{
+            targetPlayerId:selectedVote
+        });
+
+        submittedVote = true;
+        renderVoteList();
+        toast("Vote submitted!");
+    } catch (error) {
+        console.error(error);
+        toast("Vote could not be submitted.");
+    }
+}
+
+// LEAVE
+
+async function leaveRoom() {
+    if (!roomId) return;
+
+    try {
+        await sendEvent("player_left",{});
+    } catch (error) {
+        console.error(error);
+    }
+
+    if (roomChannel) {
+        await supabaseClient.removeChannel(roomChannel);
+        roomChannel = null;
+    }
+
+    roomId = null;
+    isHost = false;
+    isReady = false;
+    hasStarted = false;
+    votingOpen = false;
+    selectedVote = null;
+    myRole = null;
+    myWord = null;
+    gamePhase = "lobby";
+
+    players.clear();
+    seenMessageIds.clear();
+
+    document.getElementById("roleCard").classList.add("hidden");
+    showScreen(homeScreen);
+    toast("You left the room.");
+}
+
+// BUTTONS
+
+document.getElementById("createRoomButton").addEventListener("click",createRoom);
+document.getElementById("joinRoomButton").addEventListener("click",joinRoom);
+document.getElementById("readyButton").addEventListener("click",toggleReady);
+document.getElementById("leaveButton").addEventListener("click",leaveRoom);
+document.getElementById("gameLeaveButton").addEventListener("click",leaveRoom);
+document.getElementById("sendChatButton").addEventListener("click",sendChat);
+document.getElementById("submitClueButton").addEventListener("click",submitClue);
+document.getElementById("submitVoteButton").addEventListener("click",submitVote);
+
+document.getElementById("focusJoinButton").addEventListener("click",() => {
+    document.getElementById("roomCodeInput").focus();
+});
+
+document.getElementById("playerName").addEventListener("keydown",event => {
+    if (event.key === "Enter") createRoom();
+});
+
+document.getElementById("roomCodeInput").addEventListener("input",event => {
+    event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"");
+});
+
+document.getElementById("roomCodeInput").addEventListener("keydown",event => {
+    if (event.key === "Enter") joinRoom();
+});
+
+document.getElementById("chatInput").addEventListener("keydown",event => {
+    if (event.key === "Enter") sendChat();
+});
+
+document.getElementById("clueInput").addEventListener("keydown",event => {
+    if (event.key === "Enter") submitClue();
+});
+
+// INITIALIZE
+
+async function initialize() {
+    document.getElementById("playerName").value = playerName;
+
+    try {
+        const {error} = await supabaseClient
+            .from("game_messages")
+            .select("id")
+            .limit(1);
+
+        if (error) throw error;
+        connectionStatus.textContent = "Connected";
+    } catch (error) {
+        console.error(error);
+        connectionStatus.textContent = "Connection error";
+    }
+}
+
+initialize();
+</script>
+</body>
+</html>
