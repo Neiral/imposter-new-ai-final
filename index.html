@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -292,6 +291,12 @@ footer { text-align:center; color:#555; font-size:10px; padding:20px; }
         <span class="phase" id="phaseLabel">CLUES</span>
     </div>
 
+    <div class="card" style="margin-bottom:15px;text-align:center">
+        <div class="eyebrow" id="roundDisplay">ROUND 1 OF 3</div>
+        <h2 id="turnDisplay">Waiting for turn...</h2>
+        <p class="muted" id="turnInstruction">Watch the turn order.</p>
+    </div>
+
     <div id="roleCard" class="role-card hidden">
         <div class="eyebrow">YOUR SECRET ROLE</div>
         <h2 id="roleLabel">ASSIGNING...</h2>
@@ -370,12 +375,18 @@ const playerId =
 localStorage.setItem("imposter_player_id", playerId);
 
 let playerName = localStorage.getItem("imposter_player_name") || "";
+
 let playerAvatar =
     localStorage.getItem("imposter_player_avatar") ||
     AVATARS[Math.floor(Math.random() * AVATARS.length)];
 
 let roomId = null;
 let roomChannel = null;
+
+let currentRound = 1;
+let currentTurnPlayerId = "";
+let currentTurnPlayerName = "";
+
 let isHost = false;
 let isReady = false;
 let hasStarted = false;
@@ -387,6 +398,7 @@ let gamePhase = "lobby";
 
 let players = new Map();
 let seenMessageIds = new Set();
+
 let submittedClue = false;
 let submittedVote = false;
 
@@ -411,8 +423,12 @@ let toastTimeout;
 function toast(message) {
     toastElement.textContent = message;
     toastElement.classList.add("show");
+
     clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => toastElement.classList.remove("show"), 2500);
+
+    toastTimeout = setTimeout(() => {
+        toastElement.classList.remove("show");
+    }, 2500);
 }
 
 function getPlayerName() {
@@ -426,14 +442,18 @@ function getPlayerName() {
     playerName = name;
     localStorage.setItem("imposter_player_name", name);
     localStorage.setItem("imposter_player_avatar", playerAvatar);
+
     homeError.textContent = "";
+
     return name;
 }
 
 // DATABASE
 
 async function sendEvent(type, data = {}) {
-    if (!roomId) throw new Error("You are not in a room.");
+    if (!roomId) {
+        throw new Error("You are not in a room.");
+    }
 
     const { error } = await supabaseClient
         .from("game_messages")
@@ -454,6 +474,7 @@ async function sendEvent(type, data = {}) {
 
 function generateRoomCode() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
     return Array.from({length:6}, () =>
         chars[Math.floor(Math.random() * chars.length)]
     ).join("");
@@ -494,12 +515,17 @@ async function createRoom() {
 
             roomId = null;
 
-            if (error && !String(error.message).toLowerCase().includes("duplicate")) {
+            if (
+                error &&
+                !String(error.message).toLowerCase().includes("duplicate")
+            ) {
                 throw error;
             }
         }
 
-        if (!created) throw new Error("Could not create room.");
+        if (!created) {
+            throw new Error("Could not create room.");
+        }
 
         isHost = true;
         isReady = true;
@@ -512,6 +538,7 @@ async function createRoom() {
         });
 
         await enterRoom();
+
         toast("Room created!");
 
     } catch (error) {
@@ -520,6 +547,46 @@ async function createRoom() {
         roomId = null;
     } finally {
         button.disabled = false;
+    }
+}
+
+// TURN DISPLAY
+
+function updateTurnDisplay() {
+    const roundDisplay = document.getElementById("roundDisplay");
+    const turnDisplay = document.getElementById("turnDisplay");
+    const turnInstruction = document.getElementById("turnInstruction");
+    const cluePanel = document.getElementById("cluePanel");
+
+    if (!roundDisplay || !turnDisplay || !turnInstruction || !cluePanel) {
+        return;
+    }
+
+    roundDisplay.textContent = `ROUND ${currentRound} OF 3`;
+
+    turnDisplay.textContent = currentTurnPlayerName
+        ? `${currentTurnPlayerName}'s turn`
+        : "Waiting for turn...";
+
+    const isMyTurn =
+        gamePhase.toLowerCase() === "clues" &&
+        currentTurnPlayerId === playerId;
+
+    cluePanel.classList.toggle(
+        "hidden",
+        !isMyTurn || submittedClue
+    );
+
+    if (isMyTurn) {
+        turnInstruction.textContent = "It's your turn. Submit one clue.";
+    } else if (gamePhase.toLowerCase() === "voting") {
+        turnInstruction.textContent = "All clues are complete. Voting is open.";
+    } else if (gamePhase.toLowerCase() === "results") {
+        turnInstruction.textContent = "The game has ended.";
+    } else if (currentTurnPlayerName) {
+        turnInstruction.textContent = `${currentTurnPlayerName} is giving a clue.`;
+    } else {
+        turnInstruction.textContent = "Watch the turn order.";
     }
 }
 
@@ -547,7 +614,10 @@ async function joinRoom() {
             .order("id",{ascending:true});
 
         if (error) throw error;
-        if (!data?.length) throw new Error("Room not found.");
+
+        if (!data?.length) {
+            throw new Error("Room not found.");
+        }
 
         if (!data.some(row => row.message?.type === "room_created")) {
             throw new Error("Room does not exist.");
@@ -569,6 +639,7 @@ async function joinRoom() {
         });
 
         await enterRoom();
+
         toast("Joined room!");
 
     } catch (error) {
@@ -585,21 +656,34 @@ async function joinRoom() {
 async function enterRoom() {
     players.clear();
     seenMessageIds.clear();
+
     hasStarted = false;
     votingOpen = false;
+
     myRole = null;
     myWord = null;
+
+    currentRound = 1;
+    currentTurnPlayerId = "";
+    currentTurnPlayerName = "";
+
     submittedClue = false;
     submittedVote = false;
+    selectedVote = null;
+    gamePhase = "lobby";
 
     document.getElementById("roomCodeDisplay").textContent = roomId;
+
     document.getElementById("readyButton").textContent =
         isReady ? "Ready ✓" : "I'm Ready";
+
+    updateTurnDisplay();
 
     showScreen(lobbyScreen);
 
     // Subscribe first so new messages are not missed.
     await subscribeToRoom();
+
     await loadRoomHistory();
 }
 
@@ -641,14 +725,19 @@ async function subscribeToRoom() {
         );
 
     await new Promise((resolve,reject) => {
-        const timeout = setTimeout(() => reject(new Error("Connection timed out.")),12000);
+        const timeout = setTimeout(() => {
+            reject(new Error("Connection timed out."));
+        },12000);
 
         roomChannel.subscribe(status => {
             if (status === "SUBSCRIBED") {
                 clearTimeout(timeout);
                 connectionStatus.textContent = "Connected";
                 resolve();
-            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            } else if (
+                status === "CHANNEL_ERROR" ||
+                status === "TIMED_OUT"
+            ) {
                 clearTimeout(timeout);
                 connectionStatus.textContent = "Connection error";
                 reject(new Error("Could not connect to room."));
@@ -661,6 +750,7 @@ async function subscribeToRoom() {
 
 function processMessage(row,live) {
     if (!row || seenMessageIds.has(row.id)) return;
+
     seenMessageIds.add(row.id);
 
     const message = row.message || {};
@@ -674,7 +764,9 @@ function processMessage(row,live) {
 
         case "player_joined":
         case "ai_player_joined": {
-            const ai = type === "ai_player_joined" || Boolean(data.ai);
+            const ai =
+                type === "ai_player_joined" ||
+                Boolean(data.ai);
 
             players.set(sender,{
                 id:sender,
@@ -690,6 +782,7 @@ function processMessage(row,live) {
             if (live && sender !== playerId) {
                 toast((message.playerName || "Player") + " joined.");
             }
+
             break;
         }
 
@@ -708,10 +801,21 @@ function processMessage(row,live) {
         case "game_started":
             hasStarted = true;
             gamePhase = data.phase || "clues";
+
+            currentRound = 1;
+            currentTurnPlayerId = "";
+            currentTurnPlayerName = "";
+
+            submittedClue = false;
+            submittedVote = false;
+            selectedVote = null;
+
             showScreen(gameScreen);
             renderGamePlayers();
             updatePhaseUI();
+
             if (live) toast("The game has started!");
+
             break;
 
         case "role_assigned":
@@ -730,31 +834,65 @@ function processMessage(row,live) {
             }
             break;
 
+        case "turn_changed":
+            currentRound = Number(data.round || 1);
+            currentTurnPlayerId = data.playerId || "";
+            currentTurnPlayerName = data.playerName || "Player";
+
+            gamePhase = "clues";
+            submittedClue = false;
+
+            updatePhaseUI();
+
+            if (live && currentTurnPlayerId === playerId) {
+                toast("It's your turn to give a clue!");
+            }
+
+            break;
+
         case "phase_changed":
             gamePhase = data.phase || gamePhase;
+
+            if (gamePhase === "voting") {
+                selectedVote = null;
+                submittedVote = false;
+            }
+
             updatePhaseUI(data.instruction || "");
+
             break;
 
         case "chat":
-            addChatMessage(message.playerName || "Player",data.text || "");
+            addChatMessage(
+                message.playerName || "Player",
+                data.text || ""
+            );
             break;
 
         case "clue":
             addChatMessage(
-                (message.playerName || "Player") + " · CLUE",
+                (message.playerName || "Player") +
+                " · ROUND " +
+                (data.round || currentRound) +
+                " · CLUE",
                 data.text || ""
             );
             break;
 
         case "vote":
-            addChatMessage(message.playerName || "Player","Submitted a vote.");
+            addChatMessage(
+                message.playerName || "Player",
+                "Submitted a vote."
+            );
             break;
 
         case "game_result":
             addChatMessage("GAME",data.text || "Round ended.");
+
             if (data.secretWord) {
                 addChatMessage("SECRET WORD",data.secretWord);
             }
+
             break;
     }
 }
@@ -763,16 +901,22 @@ function processMessage(row,live) {
 
 function showRole() {
     const card = document.getElementById("roleCard");
+
     card.classList.remove("hidden");
 
-    document.getElementById("roleLabel").textContent = myRole || "ASSIGNING";
+    document.getElementById("roleLabel").textContent =
+        myRole || "ASSIGNING";
 
     if (myRole === "IMPOSTER") {
-        document.getElementById("wordLabel").textContent = "NO SECRET WORD";
+        document.getElementById("wordLabel").textContent =
+            "NO SECRET WORD";
+
         document.getElementById("roleDescription").textContent =
             "Blend in. Listen to the clues and avoid suspicion.";
     } else {
-        document.getElementById("wordLabel").textContent = myWord || "";
+        document.getElementById("wordLabel").textContent =
+            myWord || "";
+
         document.getElementById("roleDescription").textContent =
             "You are a Civilian. Give a subtle clue without saying the word.";
     }
@@ -784,18 +928,14 @@ function updatePhaseUI(instruction = "") {
     document.getElementById("phaseLabel").textContent =
         (gamePhase || "game").toUpperCase();
 
-    const cluePanel = document.getElementById("cluePanel");
-    cluePanel.classList.toggle(
-        "hidden",
-        gamePhase !== "clues" || submittedClue
-    );
+    votingOpen = gamePhase.toLowerCase() === "voting";
+
+    updateTurnDisplay();
+    renderVoteList();
 
     if (instruction) {
         toast(instruction);
     }
-
-    votingOpen = gamePhase === "voting";
-    renderVoteList();
 }
 
 // RENDER PLAYERS
@@ -807,7 +947,9 @@ function renderPlayers() {
     document.getElementById("playerCount").textContent =
         "(" + list.length + "/5)";
 
-    document.getElementById("settingsPlayers").textContent = list.length;
+    document.getElementById("settingsPlayers").textContent =
+        list.length;
+
     grid.innerHTML = "";
 
     for (const player of list) {
@@ -823,13 +965,17 @@ function renderPlayers() {
 
         const name = document.createElement("div");
         name.className = "player-name";
-        name.textContent = player.name + (player.ai ? " · AI" : "");
+
+        name.textContent =
+            player.name + (player.ai ? " · AI" : "");
 
         const status = document.createElement("div");
         status.className = "player-status";
         status.textContent = player.ready ? "Ready" : "Not ready";
 
-        if (player.ready) status.classList.add("ready-text");
+        if (player.ready) {
+            status.classList.add("ready-text");
+        }
 
         info.append(name,status);
         card.append(avatar,info);
@@ -843,6 +989,7 @@ function renderPlayers() {
 
 function renderGamePlayers() {
     const container = document.getElementById("gamePlayers");
+
     container.innerHTML = "";
 
     for (const player of players.values()) {
@@ -854,7 +1001,9 @@ function renderGamePlayers() {
         avatar.textContent = player.avatar;
 
         const name = document.createElement("span");
-        name.textContent = player.name + (player.ai ? " · AI" : "");
+
+        name.textContent =
+            player.name + (player.ai ? " · AI" : "");
 
         row.append(avatar,name);
         container.appendChild(row);
@@ -882,6 +1031,7 @@ function addChatMessage(name,text) {
     content.textContent = text;
 
     item.append(strong,content);
+
     feed.appendChild(item);
     feed.scrollTop = feed.scrollHeight;
 }
@@ -889,10 +1039,12 @@ function addChatMessage(name,text) {
 async function sendChat() {
     const input = document.getElementById("chatInput");
     const text = input.value.trim();
+
     if (!text) return;
 
     try {
         await sendEvent("chat",{text});
+
         input.value = "";
     } catch (error) {
         console.error(error);
@@ -903,21 +1055,39 @@ async function sendChat() {
 // CLUES
 
 async function submitClue() {
-    if (gamePhase !== "clues" || submittedClue) return;
+    if (
+        gamePhase.toLowerCase() !== "clues" ||
+        submittedClue ||
+        currentTurnPlayerId !== playerId
+    ) {
+        return;
+    }
 
     const input = document.getElementById("clueInput");
     const text = input.value.trim();
 
     if (!text) return;
 
+    // Prevent accidental double submission.
+    submittedClue = true;
+    updateTurnDisplay();
+
     try {
-        await sendEvent("clue",{text});
-        submittedClue = true;
+        await sendEvent("clue",{
+            text,
+            round:currentRound
+        });
+
         input.value = "";
-        updatePhaseUI();
+
         toast("Clue submitted!");
+
     } catch (error) {
         console.error(error);
+
+        submittedClue = false;
+        updateTurnDisplay();
+
         toast("Clue could not be submitted.");
     }
 }
@@ -929,10 +1099,12 @@ async function toggleReady() {
 
     const next = !isReady;
     const button = document.getElementById("readyButton");
+
     button.disabled = true;
 
     try {
         await sendEvent("player_ready",{ready:next});
+
         isReady = next;
 
         if (players.has(playerId)) {
@@ -940,8 +1112,11 @@ async function toggleReady() {
         }
 
         button.textContent = next ? "Ready ✓" : "I'm Ready";
+
         renderPlayers();
+
     } catch (error) {
+        console.error(error);
         toast("Could not update ready status.");
     } finally {
         button.disabled = false;
@@ -974,7 +1149,9 @@ function renderVoteList() {
         avatar.textContent = player.avatar;
 
         const name = document.createElement("span");
-        name.textContent = player.name + (player.ai ? " · AI" : "");
+
+        name.textContent =
+            player.name + (player.ai ? " · AI" : "");
 
         button.append(avatar,name);
 
@@ -987,11 +1164,15 @@ function renderVoteList() {
     }
 
     submit.disabled =
-        !votingOpen || !selectedVote || submittedVote;
+        !votingOpen ||
+        !selectedVote ||
+        submittedVote;
 }
 
 async function submitVote() {
-    if (!votingOpen || !selectedVote || submittedVote) return;
+    if (!votingOpen || !selectedVote || submittedVote) {
+        return;
+    }
 
     try {
         await sendEvent("vote",{
@@ -999,8 +1180,11 @@ async function submitVote() {
         });
 
         submittedVote = true;
+
         renderVoteList();
+
         toast("Vote submitted!");
+
     } catch (error) {
         console.error(error);
         toast("Vote could not be submitted.");
@@ -1028,53 +1212,89 @@ async function leaveRoom() {
     isReady = false;
     hasStarted = false;
     votingOpen = false;
+
     selectedVote = null;
     myRole = null;
     myWord = null;
+
+    currentRound = 1;
+    currentTurnPlayerId = "";
+    currentTurnPlayerName = "";
+
+    submittedClue = false;
+    submittedVote = false;
+
     gamePhase = "lobby";
 
     players.clear();
     seenMessageIds.clear();
 
     document.getElementById("roleCard").classList.add("hidden");
+
+    updateTurnDisplay();
+
     showScreen(homeScreen);
+
     toast("You left the room.");
 }
 
 // BUTTONS
 
-document.getElementById("createRoomButton").addEventListener("click",createRoom);
-document.getElementById("joinRoomButton").addEventListener("click",joinRoom);
-document.getElementById("readyButton").addEventListener("click",toggleReady);
-document.getElementById("leaveButton").addEventListener("click",leaveRoom);
-document.getElementById("gameLeaveButton").addEventListener("click",leaveRoom);
-document.getElementById("sendChatButton").addEventListener("click",sendChat);
-document.getElementById("submitClueButton").addEventListener("click",submitClue);
-document.getElementById("submitVoteButton").addEventListener("click",submitVote);
+document.getElementById("createRoomButton")
+    .addEventListener("click",createRoom);
 
-document.getElementById("focusJoinButton").addEventListener("click",() => {
-    document.getElementById("roomCodeInput").focus();
-});
+document.getElementById("joinRoomButton")
+    .addEventListener("click",joinRoom);
 
-document.getElementById("playerName").addEventListener("keydown",event => {
-    if (event.key === "Enter") createRoom();
-});
+document.getElementById("readyButton")
+    .addEventListener("click",toggleReady);
 
-document.getElementById("roomCodeInput").addEventListener("input",event => {
-    event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"");
-});
+document.getElementById("leaveButton")
+    .addEventListener("click",leaveRoom);
 
-document.getElementById("roomCodeInput").addEventListener("keydown",event => {
-    if (event.key === "Enter") joinRoom();
-});
+document.getElementById("gameLeaveButton")
+    .addEventListener("click",leaveRoom);
 
-document.getElementById("chatInput").addEventListener("keydown",event => {
-    if (event.key === "Enter") sendChat();
-});
+document.getElementById("sendChatButton")
+    .addEventListener("click",sendChat);
 
-document.getElementById("clueInput").addEventListener("keydown",event => {
-    if (event.key === "Enter") submitClue();
-});
+document.getElementById("submitClueButton")
+    .addEventListener("click",submitClue);
+
+document.getElementById("submitVoteButton")
+    .addEventListener("click",submitVote);
+
+document.getElementById("focusJoinButton")
+    .addEventListener("click",() => {
+        document.getElementById("roomCodeInput").focus();
+    });
+
+document.getElementById("playerName")
+    .addEventListener("keydown",event => {
+        if (event.key === "Enter") createRoom();
+    });
+
+document.getElementById("roomCodeInput")
+    .addEventListener("input",event => {
+        event.target.value = event.target.value
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g,"");
+    });
+
+document.getElementById("roomCodeInput")
+    .addEventListener("keydown",event => {
+        if (event.key === "Enter") joinRoom();
+    });
+
+document.getElementById("chatInput")
+    .addEventListener("keydown",event => {
+        if (event.key === "Enter") sendChat();
+    });
+
+document.getElementById("clueInput")
+    .addEventListener("keydown",event => {
+        if (event.key === "Enter") submitClue();
+    });
 
 // INITIALIZE
 
@@ -1088,7 +1308,9 @@ async function initialize() {
             .limit(1);
 
         if (error) throw error;
+
         connectionStatus.textContent = "Connected";
+
     } catch (error) {
         console.error(error);
         connectionStatus.textContent = "Connection error";
